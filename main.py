@@ -5,6 +5,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 from collections import defaultdict
 from openai import OpenAI
 import logging
+import db
 
 # logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -19,9 +20,6 @@ client = OpenAI(
     api_key=OPENAI_TOKEN,
     base_url="https://api.chatanywhere.org/v1" 
 )
-
-# временное хранилище
-chat_history = defaultdict(list)
 
 def gpt_35_api_stream(messages: list) -> str:
     try:
@@ -57,11 +55,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
-
-    # очистка истории для конкретного чата
-    if chat_id in chat_history:
-        del chat_history[chat_id]
-        logger.info(f"История чата {chat_id} очищена.")
+    await db.delete_history(chat_id)
     await update.message.reply_text("🗑️ История чата очищена. Можешь начать новую тему.")
 
 # message handlers
@@ -69,31 +63,46 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_message = update.message.text
     logger.info(f"Получено сообщение от чата {chat_id}: {user_message}")
-    chat_history[chat_id].append({"role": "user", "content": user_message})
+
+    chat_history = await db.get_history(chat_id) 
+
+    chat_history.append({"role": "user", "content": user_message})
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
-    # асинхронный вызов блокирующей функции gpt_35_api_stream в отдельном потоке
-    bot_reply = await asyncio.to_thread(gpt_35_api_stream, chat_history[chat_id])
+    bot_reply = await asyncio.to_thread(gpt_35_api_stream, chat_history)
 
-    # обработка ответа
     if bot_reply.startswith("GPT_ERROR:"):
         await update.message.reply_text(f"❌ {bot_reply}")
-        # удаляем последнее сообщение пользователя, чтобы не сохранять ошибочный контекст
-        chat_history[chat_id].pop() 
+        chat_history.pop() 
         logger.warning(f"Ошибка GPT в чате {chat_id}. Сообщение пользователя удалено из истории.")
     else:
-        chat_history[chat_id].append({"role": "assistant", "content": bot_reply})
-        # отправка ответа в телеграм
+        chat_history.append({"role": "assistant", "content": bot_reply})
+        
+        await db.save_history(chat_id, chat_history)
+        
         await update.message.reply_text(bot_reply)
         logger.info(f"Ответ GPT отправлен в чат {chat_id}.")
 
-if __name__ == "__main__":
+async def post_init(application):
+    await db.init_db_pool()
+    logger.info("база данных инициализирована.")
     
+async def post_shutdown(application):
+    await db.close_db_pool()
+    logger.info("пул подключений PostgreSQL корректно закрыт.")
+
+if __name__ == "__main__":
     if not TG_TOKEN or not OPENAI_TOKEN:
         print("tokens error")
         exit(1)
     
-    app = ApplicationBuilder().token(TG_TOKEN).build()
+    app = (
+            ApplicationBuilder()
+            .token(TG_TOKEN)
+            .post_init(post_init) 
+            .post_shutdown(post_shutdown)
+            .build()
+        )
 
     # sync handlers
     app.add_handler(CommandHandler("start", start))

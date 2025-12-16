@@ -1,10 +1,7 @@
-# db.py
-
 import os
 import asyncpg
 import json
 import logging
-import asyncio
 
 logger = logging.getLogger(__name__)
 

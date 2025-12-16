@@ -18,13 +18,12 @@ OPENAI_TOKEN = os.getenv("OPENAI_API_KEY")
 # gpt
 client = OpenAI(
     api_key=OPENAI_TOKEN,
-    base_url="https://api.chatanywhere.org/v1" 
 )
 
-def gpt_35_api_stream(messages: list) -> str:
+def gpt_5_api_stream(messages: list) -> str:
     try:
         stream = client.chat.completions.create(
-            model='gpt-3.5-turbo',
+            model='gpt-5-nano',
             messages=messages,
             stream=True,
         )
@@ -69,7 +68,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_history.append({"role": "user", "content": user_message})
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
-    bot_reply = await asyncio.to_thread(gpt_35_api_stream, chat_history)
+    bot_reply = await asyncio.to_thread(gpt_5_api_stream, chat_history)
 
     if bot_reply.startswith("GPT_ERROR:"):
         await update.message.reply_text(f"❌ {bot_reply}")

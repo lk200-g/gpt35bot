@@ -59,16 +59,18 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # message handlers
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    MSG_LIMIT = 15
     chat_id = update.message.chat_id
     user_message = update.message.text
     logger.info(f"Получено сообщение от чата {chat_id}: {user_message}")
 
-    chat_history = await db.get_history(chat_id) 
-
+    chat_history = await db.get_history(chat_id)
     chat_history.append({"role": "user", "content": user_message})
+    limited_history = chat_history[-MSG_LIMIT:]
+
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
-    bot_reply = await asyncio.to_thread(gpt_5_api_stream, chat_history)
+    bot_reply = await asyncio.to_thread(gpt_5_api_stream, limited_history)
 
     if bot_reply.startswith("GPT_ERROR:"):
         await update.message.reply_text(f"❌ {bot_reply}")

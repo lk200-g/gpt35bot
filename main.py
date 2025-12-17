@@ -2,7 +2,6 @@ import os
 import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-from collections import defaultdict
 from openai import OpenAI
 import logging
 import db
@@ -14,6 +13,7 @@ logger = logging.getLogger(__name__)
 # consts
 TG_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_TOKEN = os.getenv("OPENAI_API_KEY")
+MSG_LIMIT = 15
 
 # gpt
 client = OpenAI(
@@ -31,7 +31,7 @@ def gpt_5_api_stream(messages: list) -> str:
         print("\n[GPT-Ответ]: ", end="")
         
         for chunk in stream:
-            content = chunk.choices[0].delta.content
+            content = chunk.choices[0].delta.content 
             if content is not None:
                 # log response
                 print(content, end="", flush=True) 
@@ -45,7 +45,6 @@ def gpt_5_api_stream(messages: list) -> str:
         return f"GPT_ERROR: Произошла ошибка при получении ответа: {e}"
 
 # tg 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Привет!\n\n"
@@ -59,7 +58,6 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # message handlers
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    MSG_LIMIT = 15
     chat_id = update.message.chat_id
     user_message = update.message.text
     logger.info(f"Получено сообщение от чата {chat_id}: {user_message}")

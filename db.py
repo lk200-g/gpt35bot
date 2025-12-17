@@ -65,7 +65,7 @@ async def get_history(chat_id: int) -> list:
     global db_pool
     
     if db_pool is None:
-        logger.error("пул БД не инициализирован")
+        logger.error("пул БД не инициализирован, не могу получить историю.")
         return []
 
     try:
@@ -75,13 +75,23 @@ async def get_history(chat_id: int) -> list:
     except Exception as e:
         logger.error(f"ошибка при чтении истории для chat_id={chat_id}: {e}")
         return []
+
     if record and record['history'] is not None:
         history_data = record['history']
+        if isinstance(history_data, str):
+            try:
+                history_data = json.loads(history_data)
+                logger.warning(f"история для chat_id={chat_id} была строкой. Выполнено JSON-декодирование")
+            except json.JSONDecodeError:
+                logger.error(f"не удалось декодировать историю чата {chat_id} из строки")
+                return []
+        
         if isinstance(history_data, list):
             return history_data
         else:
-            logger.error(f"история чата {chat_id} в БД имеет неверный формат (ожидался список/JSONB)")
+            logger.error(f"история чата {chat_id} в БД имеет неверный формат (не список)")
             return []
+            
     return []
 
 async def save_history(chat_id: int, history: list):
